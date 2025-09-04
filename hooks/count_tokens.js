@@ -12,6 +12,58 @@ import crypto from 'node:crypto';
 // Version constant - must match CLI_VERSION in constants.js
 const CLI_VERSION = '0.2.9';
 
+// Calculate effective tokens for all Anthropic subscription types
+// Based on Anthropic's pricing model for cache tokens
+function calculateEffectiveTokens(tokens) {
+  const hasCache = (tokens.cache_creation > 0 || tokens.cache_read > 0);
+  const hasRegularTokens = (tokens.input > 0 || tokens.output > 0);
+  
+  // Anthropic cache pricing (official rates):
+  // - Cache creation: 1.25x base input token cost (25% premium)
+  // - Cache read: 0.1x base input token cost (90% savings)
+  const cacheEquivalentTokens = (tokens.cache_creation * 1.25) + (tokens.cache_read * 0.1);
+  const effectiveInputTokens = tokens.input + cacheEquivalentTokens;
+  const totalEffectiveTokens = effectiveInputTokens + tokens.output;
+  const totalRawTokens = tokens.input + tokens.output + tokens.cache_creation + tokens.cache_read;
+  
+  // Detect subscription type based on token patterns
+  let subscriptionType = 'api'; // Default to API
+  let hasApiUsage = false;
+  
+  if (hasCache) {
+    // Determine if Pro or Max based on cache usage patterns
+    // Max users typically have very high cache read ratios
+    const cacheReadRatio = tokens.cache_read / Math.max(totalRawTokens, 1);
+    subscriptionType = cacheReadRatio > 0.8 ? 'claude_max' : 'claude_pro';
+    
+    // Note if they also used API alongside subscription
+    hasApiUsage = hasRegularTokens;
+  }
+  
+  // Calculate cache utilization percentage
+  const cacheUtilization = totalRawTokens > 0 
+    ? Math.round(((tokens.cache_creation + tokens.cache_read) / totalRawTokens) * 100)
+    : 0;
+  
+  return {
+    ...tokens,
+    // Enhanced metrics for proper credit and UI display
+    effective_input_tokens: Math.round(effectiveInputTokens),
+    effective_total_tokens: Math.round(totalEffectiveTokens),
+    raw_total_tokens: totalRawTokens,
+    subscription_type: subscriptionType,
+    has_api_usage: hasApiUsage, // Flag for users who also used API alongside subscription
+    cache_utilization_percent: cacheUtilization,
+    cache_token_equivalent: Math.round(cacheEquivalentTokens),
+    // Detailed breakdown for hover tooltips
+    breakdown: {
+      regular_tokens: tokens.input + tokens.output,
+      cache_tokens: tokens.cache_creation + tokens.cache_read,
+      cache_savings_percent: hasCache ? Math.round((1 - (cacheEquivalentTokens / (tokens.cache_creation + tokens.cache_read))) * 100) : 0
+    }
+  };
+}
+
 const USER_HOME_DIR = homedir();
 const XDG_CONFIG_DIR = process.env.XDG_CONFIG_HOME ?? `${USER_HOME_DIR}/.config`;
 const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
@@ -208,12 +260,15 @@ async function main() {
       process.exit(0);
     }
     
-    // Prepare API payload
+    // Calculate effective tokens for proper credit
+    const enhancedTokens = calculateEffectiveTokens(usageEntry.tokens);
+    
+    // Prepare API payload with enhanced token data
     const payload = {
       twitter_handle: config.twitterUrl,
       twitter_user_id: config.twitterUserId || config.twitterUrl,
       timestamp: usageEntry.timestamp,
-      tokens: usageEntry.tokens,
+      tokens: enhancedTokens,
       model: usageEntry.model,
       interaction_id: usageEntry.interaction_hash,
       interaction_hash: usageEntry.interaction_hash

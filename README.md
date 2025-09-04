@@ -23,11 +23,20 @@ The CLI integrates with Claude Code's hook system to automatically track your us
 
 - Input tokens used
 - Output tokens generated  
-- Cache creation/read tokens
+- Cache creation/read tokens (with proper Anthropic pricing)
 - Session timestamps
 - Model used (e.g., claude-sonnet-4)
+- Subscription type detection (API, Claude Pro, Claude Max)
 
 Your actual prompts and responses are never collected - only usage statistics.
+
+### Cache Token Support
+
+This CLI properly calculates cache token costs according to Anthropic's official pricing:
+- **Cache creation tokens**: 1.25x base input token cost (25% premium)
+- **Cache read tokens**: 0.1x base input token cost (90% savings)
+
+This ensures Claude Pro and Claude Max subscribers receive proper credit for their actual usage costs, rather than being severely under-credited based on raw token counts alone.
 
 ## Understanding Claude Code Hooks
 
