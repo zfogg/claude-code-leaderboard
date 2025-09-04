@@ -12,55 +12,18 @@ import crypto from 'node:crypto';
 // Version constant - must match CLI_VERSION in constants.js
 const CLI_VERSION = '0.2.9';
 
-// Calculate effective tokens for all Anthropic subscription types
-// Based on Anthropic's pricing model for cache tokens
+// Calculate effective tokens based on Anthropic's cache pricing
 function calculateEffectiveTokens(tokens) {
-  const hasCache = (tokens.cache_creation > 0 || tokens.cache_read > 0);
-  const hasRegularTokens = (tokens.input > 0 || tokens.output > 0);
-  
-  // Anthropic cache pricing (official rates):
-  // - Cache creation: 1.25x base input token cost (25% premium)
-  // - Cache read: 0.1x base input token cost (90% savings)
+  // Anthropic cache pricing:
+  // - Cache creation: 1.25x base input token cost
+  // - Cache read: 0.1x base input token cost
   const cacheEquivalentTokens = (tokens.cache_creation * 1.25) + (tokens.cache_read * 0.1);
   const effectiveInputTokens = tokens.input + cacheEquivalentTokens;
   const totalEffectiveTokens = effectiveInputTokens + tokens.output;
-  const totalRawTokens = tokens.input + tokens.output + tokens.cache_creation + tokens.cache_read;
-  
-  // Detect subscription type based on token patterns
-  let subscriptionType = 'api'; // Default to API
-  let hasApiUsage = false;
-  
-  if (hasCache) {
-    // Determine if Pro or Max based on cache usage patterns
-    // Max users typically have very high cache read ratios
-    const cacheReadRatio = tokens.cache_read / Math.max(totalRawTokens, 1);
-    subscriptionType = cacheReadRatio > 0.8 ? 'claude_max' : 'claude_pro';
-    
-    // Note if they also used API alongside subscription
-    hasApiUsage = hasRegularTokens;
-  }
-  
-  // Calculate cache utilization percentage
-  const cacheUtilization = totalRawTokens > 0 
-    ? Math.round(((tokens.cache_creation + tokens.cache_read) / totalRawTokens) * 100)
-    : 0;
   
   return {
     ...tokens,
-    // Enhanced metrics for proper credit and UI display
-    effective_input_tokens: Math.round(effectiveInputTokens),
-    effective_total_tokens: Math.round(totalEffectiveTokens),
-    raw_total_tokens: totalRawTokens,
-    subscription_type: subscriptionType,
-    has_api_usage: hasApiUsage, // Flag for users who also used API alongside subscription
-    cache_utilization_percent: cacheUtilization,
-    cache_token_equivalent: Math.round(cacheEquivalentTokens),
-    // Detailed breakdown for hover tooltips
-    breakdown: {
-      regular_tokens: tokens.input + tokens.output,
-      cache_tokens: tokens.cache_creation + tokens.cache_read,
-      cache_savings_percent: hasCache ? Math.round((1 - (cacheEquivalentTokens / (tokens.cache_creation + tokens.cache_read))) * 100) : 0
-    }
+    effective_total_tokens: Math.round(totalEffectiveTokens)
   };
 }
 
