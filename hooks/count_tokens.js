@@ -226,7 +226,7 @@ async function main() {
     // Calculate effective tokens for proper credit
     const enhancedTokens = calculateEffectiveTokens(usageEntry.tokens);
     
-    // Prepare API payload with enhanced token data
+    // Prepare API payload
     const payload = {
       twitter_handle: config.twitterUrl,
       twitter_user_id: config.twitterUserId || config.twitterUrl,
